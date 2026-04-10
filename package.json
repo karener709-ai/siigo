@@ -1,0 +1,30 @@
+{
+  "name": "fedesoft-cartera-siigo",
+  "version": "1.0.0",
+  "description": "Sincronización cartera Siigo → HubSpot (Node.js)",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "sync": "npm run build && npm start",
+    "scheduler": "npm run build && node dist/index.js",
+    "worker": "npm run build && node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "diagnose": "npm run build && node dist/diagnostics/verify-credentials.js",
+    "siigo:check": "npm run build && node dist/diagnostics/siigo-check.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "pg": "^8.20.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/pg": "^8.20.0",
+    "typescript": "^5.3.0"
+  }
+}

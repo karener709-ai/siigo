@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: cartera_sync
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  sync:
+    build: .
+    image: fedesoft-cartera-siigo:latest
+    env_file: .env
+    # Modo “siempre activo”: el contenedor corre en bucle y hace sync cada SYNC_INTERVAL_MINUTES.
+    # Si no defines SYNC_INTERVAL_MINUTES en .env, el sync se ejecuta una vez y el contenedor termina.
+    environment:
+      APP_MODE: sync
+    restart: "no"
+
+  scheduler:
+    build: .
+    image: fedesoft-cartera-siigo:latest
+    env_file: .env
+    environment:
+      APP_MODE: scheduler
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/cartera_sync}
+      TEST_ONLY_NIT: ""
+      TEST_ONLY_NITS: ""
+      SIIGO_INVOICES_MAX_PAGES: ""
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  worker:
+    build: .
+    image: fedesoft-cartera-siigo:latest
+    env_file: .env
+    environment:
+      APP_MODE: worker
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/cartera_sync}
+      TEST_ONLY_NIT: ""
+      TEST_ONLY_NITS: ""
+      SIIGO_INVOICES_MAX_PAGES: ""
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
