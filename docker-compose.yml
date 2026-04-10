@@ -33,9 +33,18 @@ services:
       APP_MODE: scheduler
       # Host `postgres` es el servicio en esta red; no uses localhost en .env dentro de Docker.
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/cartera_sync
+      # Todos los NIT con nit2 en HubSpot (anula TEST_ONLY_* del .env)
       TEST_ONLY_NIT: ""
       TEST_ONLY_NITS: ""
       SIIGO_INVOICES_MAX_PAGES: ""
+      # Calendario: lun=1, mié=3 (convención JS: 0=dom … 6=sáb). Ventana local antes de las 08:00.
+      SCHEDULER_DAYS_OF_WEEK: "${SCHEDULER_DAYS_OF_WEEK:-1,3}"
+      SCHEDULER_TIMEZONE: "${SCHEDULER_TIMEZONE:-America/Bogota}"
+      SCHEDULER_WINDOW_START_HOUR: "${SCHEDULER_WINDOW_START_HOUR:-6}"
+      SCHEDULER_WINDOW_START_MINUTE: "${SCHEDULER_WINDOW_START_MINUTE:-0}"
+      SCHEDULER_WINDOW_END_HOUR: "${SCHEDULER_WINDOW_END_HOUR:-8}"
+      SCHEDULER_WINDOW_END_MINUTE: "${SCHEDULER_WINDOW_END_MINUTE:-0}"
+      SCHEDULER_CALENDAR_POLL_SECONDS: "${SCHEDULER_CALENDAR_POLL_SECONDS:-60}"
     depends_on:
       postgres:
         condition: service_healthy

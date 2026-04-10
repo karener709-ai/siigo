@@ -49,6 +49,21 @@ const envSchema = z.object({
   WORKER_MAX_ATTEMPTS: z.string().optional(),
   WORKER_RETRY_DELAY_MS: z.string().optional(),
   SCHEDULER_BATCH_LIMIT: z.string().optional(),
+  /**
+   * Días en los que el scheduler puede encolar (0=dom … 6=sáb), separados por comas.
+   * Ej. `1,3` = lunes y miércoles. Si está vacío o ausente, se usa intervalo SYNC_INTERVAL_MINUTES.
+   */
+  SCHEDULER_DAYS_OF_WEEK: z.string().optional(),
+  /** Zona IANA para la ventana horaria del calendario (ej. America/Bogota). */
+  SCHEDULER_TIMEZONE: z.string().optional(),
+  /** Hora local de inicio de ventana (0–23). */
+  SCHEDULER_WINDOW_START_HOUR: z.string().optional(),
+  SCHEDULER_WINDOW_START_MINUTE: z.string().optional(),
+  /** Hora local fin exclusiva: solo corre si la hora local es estrictamente menor (ej. 8 = antes de las 08:00). */
+  SCHEDULER_WINDOW_END_HOUR: z.string().optional(),
+  SCHEDULER_WINDOW_END_MINUTE: z.string().optional(),
+  /** Segundos entre comprobaciones en modo calendario. */
+  SCHEDULER_CALENDAR_POLL_SECONDS: z.string().optional(),
 });
 
 export type Env = {
@@ -87,6 +102,14 @@ export type Env = {
   workerMaxAttempts: number;
   workerRetryDelayMs: number;
   schedulerBatchLimit: number | null;
+  /** Si no es null, el scheduler usa ventana por días/horas en vez de SYNC_INTERVAL_MINUTES. */
+  schedulerDaysOfWeek: number[] | null;
+  schedulerTimezone: string;
+  schedulerWindowStartHour: number;
+  schedulerWindowStartMinute: number;
+  schedulerWindowEndHour: number;
+  schedulerWindowEndMinute: number;
+  schedulerCalendarPollSeconds: number;
 };
 
 let cached: Env | null = null;
@@ -115,6 +138,36 @@ function parseNullablePositiveInt(raw: string | undefined, max = 1_000_000): num
   const n = Number(raw.trim());
   if (!Number.isFinite(n) || n <= 0) return null;
   return Math.min(Math.floor(n), max);
+}
+
+function parseSchedulerDaysOfWeek(raw: string | undefined): number[] | null {
+  if (raw == null || raw.trim() === '') return null;
+  const set = new Set<number>();
+  for (const part of raw.split(',')) {
+    const n = Number(part.trim());
+    if (!Number.isInteger(n) || n < 0 || n > 6) {
+      throw new ConfigError(
+        `SCHEDULER_DAYS_OF_WEEK inválido: use enteros 0–6 separados por comas (0=dom, 1=lun, …, 6=sáb). Recibido: "${raw}"`
+      );
+    }
+    set.add(n);
+  }
+  if (set.size === 0) return null;
+  return [...set].sort((a, b) => a - b);
+}
+
+function parseHour(raw: string | undefined, fallback: number): number {
+  if (raw == null || raw.trim() === '') return fallback;
+  const n = Number(raw.trim());
+  if (!Number.isInteger(n) || n < 0 || n > 23) return fallback;
+  return n;
+}
+
+function parseMinute(raw: string | undefined, fallback: number): number {
+  if (raw == null || raw.trim() === '') return fallback;
+  const n = Number(raw.trim());
+  if (!Number.isInteger(n) || n < 0 || n > 59) return fallback;
+  return n;
 }
 
 const siigoOnlySchema = z.object({
@@ -168,6 +221,13 @@ export function getEnvSiigoOnly(): Env {
     workerMaxAttempts: 3,
     workerRetryDelayMs: 30_000,
     schedulerBatchLimit: null,
+    schedulerDaysOfWeek: null,
+    schedulerTimezone: 'America/Bogota',
+    schedulerWindowStartHour: 6,
+    schedulerWindowStartMinute: 0,
+    schedulerWindowEndHour: 8,
+    schedulerWindowEndMinute: 0,
+    schedulerCalendarPollSeconds: 60,
   };
 }
 
@@ -195,6 +255,21 @@ export function getEnv(): Env {
   }
 
   const raw = parsed.data;
+  const schedulerDaysOfWeek = parseSchedulerDaysOfWeek(raw.SCHEDULER_DAYS_OF_WEEK);
+  const schedulerTimezone = raw.SCHEDULER_TIMEZONE?.trim() || 'America/Bogota';
+  const schedulerWindowStartHour = parseHour(raw.SCHEDULER_WINDOW_START_HOUR, 6);
+  const schedulerWindowStartMinute = parseMinute(raw.SCHEDULER_WINDOW_START_MINUTE, 0);
+  const schedulerWindowEndHour = parseHour(raw.SCHEDULER_WINDOW_END_HOUR, 8);
+  const schedulerWindowEndMinute = parseMinute(raw.SCHEDULER_WINDOW_END_MINUTE, 0);
+  const startTotal = schedulerWindowStartHour * 60 + schedulerWindowStartMinute;
+  const endTotal = schedulerWindowEndHour * 60 + schedulerWindowEndMinute;
+  if (schedulerDaysOfWeek != null && endTotal <= startTotal) {
+    throw new ConfigError(
+      'Ventana del scheduler: SCHEDULER_WINDOW_END debe ser posterior a SCHEDULER_WINDOW_START (mismo día, minutos desde medianoche).'
+    );
+  }
+  const schedulerCalendarPollSeconds = parsePositiveInt(raw.SCHEDULER_CALENDAR_POLL_SECONDS, 60, 3_600);
+
   cached = {
     appMode: raw.APP_MODE,
     siigo: {
@@ -221,6 +296,13 @@ export function getEnv(): Env {
     workerMaxAttempts: parsePositiveInt(raw.WORKER_MAX_ATTEMPTS, 3, 100),
     workerRetryDelayMs: parsePositiveInt(raw.WORKER_RETRY_DELAY_MS, 30_000),
     schedulerBatchLimit: parseNullablePositiveInt(raw.SCHEDULER_BATCH_LIMIT, 1_000_000),
+    schedulerDaysOfWeek,
+    schedulerTimezone,
+    schedulerWindowStartHour,
+    schedulerWindowStartMinute,
+    schedulerWindowEndHour,
+    schedulerWindowEndMinute,
+    schedulerCalendarPollSeconds,
   };
   return cached;
 }

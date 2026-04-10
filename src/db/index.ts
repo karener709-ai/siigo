@@ -103,6 +103,26 @@ export async function initDbSchema(env: Env): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS scheduler_calendar_fire (
+      day_key TEXT PRIMARY KEY,
+      fired_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+}
+
+export async function hasSchedulerCalendarFire(env: Env, dayKey: string): Promise<boolean> {
+  const res = await getDbPool(env).query<{ exists: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM scheduler_calendar_fire WHERE day_key = $1) AS exists`,
+    [dayKey]
+  );
+  return Boolean(res.rows[0]?.exists);
+}
+
+export async function recordSchedulerCalendarFire(env: Env, dayKey: string): Promise<void> {
+  await getDbPool(env).query(`INSERT INTO scheduler_calendar_fire (day_key) VALUES ($1) ON CONFLICT (day_key) DO NOTHING`, [
+    dayKey,
+  ]);
 }
 
 export async function withDbClient<T>(env: Env, fn: (client: PoolClient) => Promise<T>): Promise<T> {
