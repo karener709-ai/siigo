@@ -7,6 +7,12 @@ services:
       POSTGRES_PASSWORD: postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cartera_sync"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     restart: unless-stopped
 
   sync:
@@ -25,12 +31,14 @@ services:
     env_file: .env
     environment:
       APP_MODE: scheduler
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/cartera_sync}
+      # Host `postgres` es el servicio en esta red; no uses localhost en .env dentro de Docker.
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/cartera_sync
       TEST_ONLY_NIT: ""
       TEST_ONLY_NITS: ""
       SIIGO_INVOICES_MAX_PAGES: ""
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   worker:
@@ -39,12 +47,13 @@ services:
     env_file: .env
     environment:
       APP_MODE: worker
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/cartera_sync}
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/cartera_sync
       TEST_ONLY_NIT: ""
       TEST_ONLY_NITS: ""
       SIIGO_INVOICES_MAX_PAGES: ""
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
