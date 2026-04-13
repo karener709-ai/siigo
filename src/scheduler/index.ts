@@ -96,11 +96,16 @@ export async function runSchedulerCalendarLoop(): Promise<never> {
   const daySet = new Set(days);
   const tz = env.schedulerTimezone;
   const startM = minutesSinceMidnight(env.schedulerWindowStartHour, env.schedulerWindowStartMinute);
-  const endM = minutesSinceMidnight(env.schedulerWindowEndHour, env.schedulerWindowEndMinute);
+  const endM = env.schedulerWindowEndExclusiveMinutes;
   const pollMs = env.schedulerCalendarPollSeconds * 1000;
 
+  const startLabel = `${String(env.schedulerWindowStartHour).padStart(2, '0')}:${String(env.schedulerWindowStartMinute).padStart(2, '0')}`;
+  const endLabel =
+    endM == null
+      ? 'sin hora límite (resto del día)'
+      : `antes de ${String(Math.floor(endM / 60)).padStart(2, '0')}:${String(endM % 60).padStart(2, '0')}`;
   console.log(
-    `Modo scheduler calendario: TZ=${tz}, días JS ${[...daySet].sort((a, b) => a - b).join(', ')} (0=dom…6=sáb), ventana local ${String(env.schedulerWindowStartHour).padStart(2, '0')}:${String(env.schedulerWindowStartMinute).padStart(2, '0')}–antes de ${String(env.schedulerWindowEndHour).padStart(2, '0')}:${String(env.schedulerWindowEndMinute).padStart(2, '0')}, poll ${env.schedulerCalendarPollSeconds}s.`
+    `Modo scheduler calendario: TZ=${tz}, días JS ${[...daySet].sort((a, b) => a - b).join(', ')} (0=dom…6=sáb), desde las ${startLabel} local (${endLabel}), poll ${env.schedulerCalendarPollSeconds}s.`
   );
 
   // eslint-disable-next-line no-constant-condition
@@ -110,7 +115,8 @@ export async function runSchedulerCalendarLoop(): Promise<never> {
       const parts = getZonedCalendarParts(new Date(), tz);
       const dayKey = formatDayKey(parts);
       const nowM = minutesSinceMidnight(parts.hour, parts.minute);
-      const inWindow = daySet.has(parts.dow) && nowM >= startM && nowM < endM;
+      const inWindow =
+        daySet.has(parts.dow) && nowM >= startM && (endM === null || nowM < endM);
 
       if (inWindow) {
         const locked = await tryAcquireSchedulerLock(env);

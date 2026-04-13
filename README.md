@@ -134,7 +134,7 @@ docker compose up -d postgres scheduler worker
 docker compose logs -f scheduler worker
 ```
 
-El `docker-compose.yml` del repositorio programa el scheduler en **calendario**: lunes y miércoles, entre **06:00 y antes de las 08:00** (hora `SCHEDULER_TIMEZONE`, por defecto Bogotá), una corrida por día. Puedes cambiar días u horas con variables en `.env` o editando el compose.
+El `docker-compose.yml` del repositorio programa el scheduler en **calendario**: lunes y miércoles, **desde las 05:00** hora `SCHEDULER_TIMEZONE` (por defecto Bogotá) **sin hora límite** ese día (una corrida por día). Para acotar el tramo, define `SCHEDULER_WINDOW_END_HOUR` y `SCHEDULER_WINDOW_END_MINUTE` en `.env`.
 
 ### Flujo del modo servidor
 
@@ -218,8 +218,8 @@ docker compose run --rm --entrypoint node sync dist/diagnostics/siigo-check.js
 | `SCHEDULER_BATCH_LIMIT` | No | Límite opcional de NITs por corrida |
 | `SCHEDULER_DAYS_OF_WEEK` | No | Modo calendario: días `0`–`6` separados por comas (`0`=dom, `1`=lun, …, `6`=sáb). Ej. `1,3` = lunes y miércoles. Si se define, sustituye al intervalo `SYNC_INTERVAL_MINUTES` en el scheduler |
 | `SCHEDULER_TIMEZONE` | No | Zona IANA para la ventana (ej. `America/Bogota`). Por defecto `America/Bogota` |
-| `SCHEDULER_WINDOW_START_HOUR` / `MINUTE` | No | Inicio de ventana local (por defecto 6:00) |
-| `SCHEDULER_WINDOW_END_HOUR` / `MINUTE` | No | Fin exclusivo (por defecto 8:00 = solo antes de las 08:00) |
+| `SCHEDULER_WINDOW_START_HOUR` / `MINUTE` | No | Inicio local (por defecto 5:00) |
+| `SCHEDULER_WINDOW_END_HOUR` / `MINUTE` | No | Fin exclusivo opcional; si ambos van vacíos, no hay tope (desde la hora de inicio hasta el fin del día) |
 | `SCHEDULER_CALENDAR_POLL_SECONDS` | No | Cada cuántos segundos el scheduler comprueba el calendario (por defecto 60) |
 
 ## Que te puede faltar para que funcione completo

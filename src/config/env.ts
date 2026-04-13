@@ -59,7 +59,10 @@ const envSchema = z.object({
   /** Hora local de inicio de ventana (0–23). */
   SCHEDULER_WINDOW_START_HOUR: z.string().optional(),
   SCHEDULER_WINDOW_START_MINUTE: z.string().optional(),
-  /** Hora local fin exclusiva: solo corre si la hora local es estrictamente menor (ej. 8 = antes de las 08:00). */
+  /**
+   * Fin de ventana exclusivo (opcional). Si HORA y MINUTO van vacíos, no hay tope: corre desde START en adelante ese día.
+   * Ej. solo 8 y 0 = solo antes de las 08:00.
+   */
   SCHEDULER_WINDOW_END_HOUR: z.string().optional(),
   SCHEDULER_WINDOW_END_MINUTE: z.string().optional(),
   /** Segundos entre comprobaciones en modo calendario. */
@@ -107,8 +110,8 @@ export type Env = {
   schedulerTimezone: string;
   schedulerWindowStartHour: number;
   schedulerWindowStartMinute: number;
-  schedulerWindowEndHour: number;
-  schedulerWindowEndMinute: number;
+  /** Minutos desde medianoche, fin exclusivo; null = sin hora límite (desde la hora de inicio hasta fin del día). */
+  schedulerWindowEndExclusiveMinutes: number | null;
   schedulerCalendarPollSeconds: number;
 };
 
@@ -170,6 +173,16 @@ function parseMinute(raw: string | undefined, fallback: number): number {
   return n;
 }
 
+/** Fin de ventana en minutos desde medianoche (exclusivo). Vacío = sin tope. */
+function parseSchedulerWindowEndExclusive(rawH: string | undefined, rawM: string | undefined): number | null {
+  const hEmpty = rawH == null || String(rawH).trim() === '';
+  const mEmpty = rawM == null || String(rawM).trim() === '';
+  if (hEmpty && mEmpty) return null;
+  const h = hEmpty ? 0 : parseHour(rawH, 0);
+  const mi = mEmpty ? 0 : parseMinute(rawM, 0);
+  return h * 60 + mi;
+}
+
 const siigoOnlySchema = z.object({
   SIIGO_AUTH_URL: z.string().url('SIIGO_AUTH_URL debe ser una URL válida'),
   SIIGO_API_BASE_URL: z.string().url('SIIGO_API_BASE_URL debe ser una URL válida'),
@@ -223,10 +236,9 @@ export function getEnvSiigoOnly(): Env {
     schedulerBatchLimit: null,
     schedulerDaysOfWeek: null,
     schedulerTimezone: 'America/Bogota',
-    schedulerWindowStartHour: 6,
+    schedulerWindowStartHour: 5,
     schedulerWindowStartMinute: 0,
-    schedulerWindowEndHour: 8,
-    schedulerWindowEndMinute: 0,
+    schedulerWindowEndExclusiveMinutes: null,
     schedulerCalendarPollSeconds: 60,
   };
 }
@@ -257,13 +269,18 @@ export function getEnv(): Env {
   const raw = parsed.data;
   const schedulerDaysOfWeek = parseSchedulerDaysOfWeek(raw.SCHEDULER_DAYS_OF_WEEK);
   const schedulerTimezone = raw.SCHEDULER_TIMEZONE?.trim() || 'America/Bogota';
-  const schedulerWindowStartHour = parseHour(raw.SCHEDULER_WINDOW_START_HOUR, 6);
+  const schedulerWindowStartHour = parseHour(raw.SCHEDULER_WINDOW_START_HOUR, 5);
   const schedulerWindowStartMinute = parseMinute(raw.SCHEDULER_WINDOW_START_MINUTE, 0);
-  const schedulerWindowEndHour = parseHour(raw.SCHEDULER_WINDOW_END_HOUR, 8);
-  const schedulerWindowEndMinute = parseMinute(raw.SCHEDULER_WINDOW_END_MINUTE, 0);
+  const schedulerWindowEndExclusiveMinutes = parseSchedulerWindowEndExclusive(
+    raw.SCHEDULER_WINDOW_END_HOUR,
+    raw.SCHEDULER_WINDOW_END_MINUTE
+  );
   const startTotal = schedulerWindowStartHour * 60 + schedulerWindowStartMinute;
-  const endTotal = schedulerWindowEndHour * 60 + schedulerWindowEndMinute;
-  if (schedulerDaysOfWeek != null && endTotal <= startTotal) {
+  if (
+    schedulerDaysOfWeek != null &&
+    schedulerWindowEndExclusiveMinutes != null &&
+    schedulerWindowEndExclusiveMinutes <= startTotal
+  ) {
     throw new ConfigError(
       'Ventana del scheduler: SCHEDULER_WINDOW_END debe ser posterior a SCHEDULER_WINDOW_START (mismo día, minutos desde medianoche).'
     );
@@ -300,8 +317,7 @@ export function getEnv(): Env {
     schedulerTimezone,
     schedulerWindowStartHour,
     schedulerWindowStartMinute,
-    schedulerWindowEndHour,
-    schedulerWindowEndMinute,
+    schedulerWindowEndExclusiveMinutes,
     schedulerCalendarPollSeconds,
   };
   return cached;
