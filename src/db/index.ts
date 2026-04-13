@@ -43,9 +43,15 @@ export function getDbPool(env: Env): Pool {
   return pool;
 }
 
+/** Evita que scheduler y worker ejecuten CREATE TABLE a la vez (race en pg_type). */
+const SCHEMA_INIT_LOCK_KEY = 876_543_210;
+
 export async function initDbSchema(env: Env): Promise<void> {
-  const db = getDbPool(env);
-  await db.query(`
+  const client = await getDbPool(env).connect();
+  try {
+    await client.query(`SELECT pg_advisory_lock($1)`, [SCHEMA_INIT_LOCK_KEY]);
+    try {
+      await client.query(`
     CREATE TABLE IF NOT EXISTS sync_runs (
       id TEXT PRIMARY KEY,
       status TEXT NOT NULL,
@@ -60,7 +66,7 @@ export async function initDbSchema(env: Env): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
-  await db.query(`
+      await client.query(`
     CREATE TABLE IF NOT EXISTS sync_jobs (
       id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL REFERENCES sync_runs(id) ON DELETE CASCADE,
@@ -77,11 +83,11 @@ export async function initDbSchema(env: Env): Promise<void> {
       UNIQUE(run_id, nit)
     );
   `);
-  await db.query(`
+      await client.query(`
     CREATE INDEX IF NOT EXISTS idx_sync_jobs_queue
     ON sync_jobs (status, available_at, created_at);
   `);
-  await db.query(`
+      await client.query(`
     CREATE TABLE IF NOT EXISTS sync_job_results (
       job_id TEXT PRIMARY KEY REFERENCES sync_jobs(id) ON DELETE CASCADE,
       updated BOOLEAN NOT NULL DEFAULT FALSE,
@@ -92,7 +98,7 @@ export async function initDbSchema(env: Env): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
-  await db.query(`
+      await client.query(`
     CREATE TABLE IF NOT EXISTS sync_company_state (
       nit TEXT PRIMARY KEY,
       last_seen_in_siigo_at TIMESTAMPTZ NULL,
@@ -103,12 +109,18 @@ export async function initDbSchema(env: Env): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
-  await db.query(`
+      await client.query(`
     CREATE TABLE IF NOT EXISTS scheduler_calendar_fire (
       day_key TEXT PRIMARY KEY,
       fired_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+    } finally {
+      await client.query(`SELECT pg_advisory_unlock($1)`, [SCHEMA_INIT_LOCK_KEY]);
+    }
+  } finally {
+    client.release();
+  }
 }
 
 export async function hasSchedulerCalendarFire(env: Env, dayKey: string): Promise<boolean> {
