@@ -196,6 +196,7 @@ function toHubSpotProperties(
     cartera_2026: amountForHubSpot(data.cartera_2026),
     numero_de_factura_2026: data.numero_de_factura_2026,
     centro_de_costo: data.centro_de_costo,
+    dias_en_mora: amountForHubSpot(data.dias_en_mora),
   };
 
   const seg = env.hubspot.seguimientoAfiliacion;

@@ -15,8 +15,15 @@ export interface NormalizedInvoice {
   balance: number;
   cost_center: string;
   date: string;
+  /** Fecha de vencimiento (último `payments[].due_date` de la factura); null si Siigo no la envía o es nota crédito. */
+  due_date: string | null;
   raw: SiigoInvoiceListItem | SiigoCreditNoteListItem;
 }
+
+/** Cuota de pago de una factura; `due_date` es la fecha de vencimiento (yyyy-MM-dd) de esa cuota. */
+export const SiigoInvoicePaymentSchema = z.object({
+  due_date: z.string().optional(),
+});
 
 /**
  * Ítem devuelto por Siigo en GET /invoices.
@@ -37,6 +44,7 @@ export const SiigoInvoiceListItemSchema = z.object({
       z.null(),
     ])
     .optional(),
+  payments: z.array(SiigoInvoicePaymentSchema).optional(),
 });
 
 export type SiigoInvoiceListItem = z.infer<typeof SiigoInvoiceListItemSchema>;

@@ -119,7 +119,8 @@ Todas las credenciales y URLs se leen de **variables de entorno**. No hay archiv
 - **Facturas** (`/invoices`): por cada factura se usan:
   - `number`, `balance`, `issue_date`
   - `customer.identification` → NIT
-  - `cost_center.name` → centro de costo  
+  - `cost_center.name` → centro de costo
+  - `payments[].due_date` → fecha de vencimiento (se toma la cuota más tardía) para calcular días en mora
   Se consideran líneas con **balance distinto de 0**: facturas con saldo **positivo** y abonos / **notas crédito** con saldo **negativo** en el mismo listado, para que el total por NIT y año refleje el neto (p. ej. factura + NC).
 
 ### Hacia HubSpot (salida)
@@ -137,6 +138,7 @@ Por cada empresa encontrada por NIT (`nit2`), se actualizan estas propiedades:
 | `cartera_2026` | Suma de saldos año 2026 |
 | `numero_de_factura_2026` | Números de factura año 2026 |
 | `centro_de_costo` | Lista única de centros de costo, separados por coma |
+| `dias_en_mora` | Mayor número de días vencidos entre las facturas abiertas (hoy − fecha de vencimiento más antigua vencida); vacío si ninguna está vencida |
 | Seguimiento de afiliación (nombre en `.env`) | **Paso 1:** NIT con facturas abiertas en Siigo → datos y “mora” desde Siigo. **Paso 2 (sync completo, sin `TEST_ONLY_NIT`):** empresas que **aún tienen saldo** en HubSpot (`cartera_*` / `saldo_2025`) pero **no** aparecen en la lista de facturas abiertas de Siigo en esa corrida → se limpian montos (como Siigo sin deuda) y “al día”. Así solo quienes **debían y pagaron** (dejaron de salir en Siigo) pasan a al día. Si Siigo y HubSpot ya van sin saldo en cartera → no se toca. |
 
 En HubSpot las empresas se identifican por la propiedad **`nit2`**; debe coincidir con el NIT que devuelve Siigo en `customer.identification`.

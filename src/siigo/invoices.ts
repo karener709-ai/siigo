@@ -47,6 +47,21 @@ function costCenterLabel(cc: SiigoInvoiceListItem['cost_center']): string {
   return '';
 }
 
+/** Fecha de vencimiento de la factura: la más tardía entre sus cuotas (`payments[].due_date`). */
+function latestDueDate(payments: SiigoInvoiceListItem['payments']): string | null {
+  if (!payments || payments.length === 0) return null;
+  let latest: string | null = null;
+  let latestTime = -Infinity;
+  for (const p of payments) {
+    if (!p.due_date) continue;
+    const t = new Date(p.due_date).getTime();
+    if (Number.isNaN(t) || t <= latestTime) continue;
+    latest = p.due_date;
+    latestTime = t;
+  }
+  return latest;
+}
+
 function normalizeListItem(item: SiigoInvoiceListItem): NormalizedInvoice | null {
   const issueDate = item.issue_date ?? item.date;
   if (!issueDate) return null;
@@ -65,6 +80,7 @@ function normalizeListItem(item: SiigoInvoiceListItem): NormalizedInvoice | null
     balance: Number(item.balance),
     cost_center: costCenterLabel(item.cost_center),
     date: issueDate,
+    due_date: latestDueDate(item.payments),
     raw: item,
   };
 }

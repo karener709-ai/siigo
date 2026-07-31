@@ -57,6 +57,7 @@ function normalizeCreditNote(item: SiigoCreditNoteListItem): NormalizedInvoice |
     balance: -Math.abs(Number(item.total)),
     cost_center: costCenterLabel(item.cost_center),
     date: sourceDate,
+    due_date: null,
     raw: item,
   };
 }
