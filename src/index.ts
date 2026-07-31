@@ -11,7 +11,9 @@ function sleep(ms: number): Promise<void> {
 async function runOnce(): Promise<never> {
   const envBefore = getEnv();
   const result = await runSync();
-  console.log(`Sync OK. Actualizadas: ${result.updated}, Sin empresa en HubSpot: ${result.skipped}`);
+  console.log(
+    `Sync OK. Actualizadas: ${result.updated}, Sin empresa en HubSpot: ${result.skipped}, Con error: ${result.errored}`
+  );
   if (envBefore.syncDryRun) {
     console.log(
       '(Modo DRY RUN: no hubo escritura en HubSpot. Pon SYNC_DRY_RUN=false para aplicar cambios reales.)'
@@ -35,7 +37,7 @@ async function runLoop(): Promise<never> {
     try {
       const result = await runSync();
       console.log(
-        `[${new Date().toISOString()}] Sync OK. Actualizadas: ${result.updated}, Sin empresa en HubSpot o DRY RUN: ${result.skipped}. Próximo en ${env.syncIntervalMinutes} min.`
+        `[${new Date().toISOString()}] Sync OK. Actualizadas: ${result.updated}, Sin empresa en HubSpot o DRY RUN: ${result.skipped}, Con error: ${result.errored}. Próximo en ${env.syncIntervalMinutes} min.`
       );
     } catch (err) {
       if (err instanceof ConfigError) {

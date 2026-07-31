@@ -9,11 +9,10 @@ import {
   totalSaldoCarteraAbierta,
 } from '../mapper/cartera.js';
 import { searchNitsWithCarteraSaldoEnHubSpot, updateCompanyCartera } from '../hubspot/company.js';
-import { SyncError } from '../Core/errors.js';
 import { createSharedSiigoContext, syncNit } from './service.js';
 
 /** Ejecuta el flujo completo: Siigo (auth + facturas + NC) → mapeo → actualización HubSpot. */
-export async function runSync(): Promise<{ updated: number; skipped: number }> {
+export async function runSync(): Promise<{ updated: number; skipped: number; errored: number }> {
   const env = getEnv();
   const opts = {
     timeoutMs: env.httpTimeoutMs,
@@ -64,6 +63,7 @@ export async function runSync(): Promise<{ updated: number; skipped: number }> {
 
   let updated = 0;
   let skipped = 0;
+  let errored = 0;
 
   if (hasNitFilter) {
     console.log(`Paso 1 — Deudores según Siigo (${selectedNits.size} NIT en esta pasada, modo prueba controlada).`);
@@ -76,7 +76,15 @@ export async function runSync(): Promise<{ updated: number; skipped: number }> {
       opts
     );
     for (const nit of selectedNits) {
-      const result = await syncNit(env, nit, opts, sharedContext);
+      let result: Awaited<ReturnType<typeof syncNit>>;
+      try {
+        result = await syncNit(env, nit, opts, sharedContext);
+      } catch (err) {
+        errored++;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[ERROR] NIT ${nit}: ${msg}`);
+        continue;
+      }
       if (result.hubspotResult === 'dry_run') {
         skipped++;
         continue;
@@ -143,8 +151,9 @@ export async function runSync(): Promise<{ updated: number; skipped: number }> {
           skipped++;
         }
       } catch (err) {
+        errored++;
         const msg = err instanceof Error ? err.message : String(err);
-        throw new SyncError(`Error actualizando NIT ${nit} en HubSpot: ${msg}`, 'HUBSPOT_UPDATE', err);
+        console.error(`[ERROR] NIT ${nit}: ${msg}`);
       }
     }
 
@@ -181,11 +190,12 @@ export async function runSync(): Promise<{ updated: number; skipped: number }> {
           skipped++;
         }
       } catch (err) {
+        errored++;
         const msg = err instanceof Error ? err.message : String(err);
-        throw new SyncError(`Error actualizando NIT ${nit} en HubSpot (paso pagados): ${msg}`, 'HUBSPOT_UPDATE', err);
+        console.error(`[ERROR] NIT ${nit} (paso pagados): ${msg}`);
       }
     }
   }
 
-  return { updated, skipped };
+  return { updated, skipped, errored };
 }
